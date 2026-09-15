@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "dist" }
+    }
+  ],
+  "routes": [
+    {
+      "src": "^/sw.js$",
+      "headers": { "cache-control": "public, max-age=0, must-revalidate" },
+      "dest": "/sw.js"
+    },
+    {
+      "src": "^/manifest.webmanifest$",
+      "headers": { "cache-control": "public, max-age=0, must-revalidate" },
+      "dest": "/manifest.webmanifest"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}

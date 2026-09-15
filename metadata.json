@@ -1,0 +1,7 @@
+{
+  "name": "Green Panorama 4",
+  "description": "Portal Digital Warga Komplek Green Panorama 4 - PWA, Pengumuman, Kegiatan, Laporan, Forum, dan Fasilitas terhubung Firebase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

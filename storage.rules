@@ -1,0 +1,45 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Max file size 5MB and must be image
+    function isImageBelow5MB() {
+      return request.resource.contentType.matches('image/.*') &&
+             request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // User profile avatars
+    match /avatars/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId && isImageBelow5MB();
+    }
+
+    // Report evidence photos
+    match /reports/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId && isImageBelow5MB();
+    }
+
+    // Forum post images
+    match /forum/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId && isImageBelow5MB();
+    }
+
+    // Activity posters (Admin only)
+    match /activities/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isImageBelow5MB();
+    }
+
+    // Facility photos (Admin only)
+    match /facilities/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isImageBelow5MB();
+    }
+  }
+}

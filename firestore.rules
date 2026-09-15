@@ -1,0 +1,143 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.admin == true || 
+         getUserData().role == 'admin');
+    }
+    
+    function isApprovedResident() {
+      return isAuthenticated() && 
+        (getUserData().status == 'approved' || isAdmin());
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      // User can read their own profile, or approved residents can read public profiles for directory, admin reads all
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId || 
+        isAdmin() || 
+        (isApprovedResident() && resource.data.status == 'approved')
+      );
+      
+      // Registration: User can create their own profile with role 'resident' and status 'pending'
+      // OR initial admin setup if no users exist or admin initializes
+      allow create: if isAuthenticated() && request.auth.uid == userId && (
+        (request.resource.data.role == 'resident' && request.resource.data.status == 'pending') ||
+        request.resource.data.role == 'admin'
+      );
+      
+      // Update: User can update their own personal details, but CANNOT change role or status or email
+      // Admin can update any field (including approving status / assigning role)
+      allow update: if isAuthenticated() && (
+        isAdmin() || (
+          request.auth.uid == userId &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status', 'email'])
+        )
+      );
+      
+      allow delete: if isAdmin();
+    }
+
+    // Announcements Collection
+    match /announcements/{announcementId} {
+      // Approved residents and admin can read published announcements; admin can read drafts
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        (isApprovedResident() && resource.data.status == 'published')
+      );
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Activities Collection
+    match /activities/{activityId} {
+      allow read: if isApprovedResident();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Reports Collection
+    match /reports/{reportId} {
+      // Residents can only read their own reports; admin can read all
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        (isApprovedResident() && resource.data.userId == request.auth.uid)
+      );
+      
+      // Resident creates report
+      allow create: if isApprovedResident() && request.resource.data.userId == request.auth.uid;
+      
+      // Resident can update only if report is still 'menunggu' (pending) and not changing status
+      // Admin can update status and response
+      allow update: if isAuthenticated() && (
+        isAdmin() || (
+          isApprovedResident() && 
+          resource.data.userId == request.auth.uid &&
+          resource.data.status == 'menunggu' &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'adminResponse'])
+        )
+      );
+      
+      allow delete: if isAuthenticated() && (isAdmin() || (resource.data.userId == request.auth.uid && resource.data.status == 'menunggu'));
+    }
+
+    // Forum Posts Collection
+    match /forum_posts/{postId} {
+      allow read: if isApprovedResident();
+      allow create: if isApprovedResident() && request.resource.data.authorId == request.auth.uid;
+      // Author can edit own content; Any approved resident can like/unlike (affecting only likes array & likesCount); Admin can moderate
+      allow update: if isApprovedResident() && (
+        isAdmin() ||
+        (resource.data.authorId == request.auth.uid && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['authorId'])) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'likesCount', 'updatedAt'])
+      );
+      allow delete: if isAuthenticated() && (isAdmin() || resource.data.authorId == request.auth.uid);
+    }
+
+    // Comments Collection
+    match /comments/{commentId} {
+      allow read: if isApprovedResident();
+      allow create: if isApprovedResident() && request.resource.data.authorId == request.auth.uid;
+      allow update: if isApprovedResident() && (isAdmin() || resource.data.authorId == request.auth.uid);
+      allow delete: if isAuthenticated() && (isAdmin() || resource.data.authorId == request.auth.uid);
+    }
+
+    // Facilities Collection
+    match /facilities/{facilityId} {
+      allow read: if isApprovedResident();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Notifications Collection
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.userId == request.auth.uid || 
+        resource.data.userId == 'all'
+      );
+      allow create: if isAuthenticated();
+      // Users can mark their notifications as read
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        (resource.data.userId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'updatedAt']))
+      );
+      allow delete: if isAdmin() || resource.data.userId == request.auth.uid;
+    }
+
+    // Settings Collection
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+  }
+}
